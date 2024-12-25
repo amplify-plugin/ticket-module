@@ -10,7 +10,7 @@ Route::group([
     'middleware' => array_merge(config('backpack.base.web_middleware', ['web']),
         (array) config('backpack.base.middleware_key', 'admin')),
     ['admin_password_reset_required'],
-    'namespace' => 'Amplify\Ticket\Controllers',
+    'namespace' => 'Amplify\System\Ticket\Controllers',
 ], function () {
     Route::crud('ticket', 'TicketCrudController');
     Route::crud('ticket-department', 'TicketDepartmentCrudController');
