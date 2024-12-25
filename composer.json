@@ -21,9 +21,6 @@
     },
     "extra": {
         "laravel": {
-            "providers": [
-                "Amplify\\System\\Ticket\\TicketServiceProvider"
-            ],
             "aliases": {
                 "Ticket": "Amplify\\System\\Ticket\\Facades\\Ticket"
             }
