@@ -24,4 +24,4 @@ Route::controller(TicketCrudController::class)->prefix('ticket')->as('admin.')->
 Route::post('/tickets-store', [TicketController::class, 'newTicket'])->name('tickets.store');
 Route::post('/tickets-reply/{thread}', [TicketController::class, 'replyToTicket'])->name('tickets.reply');
 
-Route::name('frontend.tickets')->middleware(['web', ProtectAgainstSpam::class, 'customers'])->resource('tickets', TicketController::class);
+Route::name('frontend.tickets.')->middleware(['web', ProtectAgainstSpam::class, 'customers'])->resource('tickets', TicketController::class);
