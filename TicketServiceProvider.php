@@ -27,7 +27,6 @@ class TicketServiceProvider extends ServiceProvider
 
         $this->app->bind(TicketThreadParticipantInterface::class, TicketThreadParticipant::class);
 
-        $this->loadRoutesFrom(__DIR__.'/Routes/web.php');
     }
 
     /**
@@ -37,6 +36,6 @@ class TicketServiceProvider extends ServiceProvider
      */
     public function boot()
     {
-        //AliasLoader::getInstance()->alias('Ticket', EasyAsk::class);
+        $this->loadRoutesFrom(__DIR__.'/Routes/web.php');
     }
 }
