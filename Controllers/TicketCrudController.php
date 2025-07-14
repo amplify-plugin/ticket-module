@@ -6,7 +6,7 @@ use Amplify\System\Ticket\Facades\Ticket;
 use Amplify\System\Ticket\Models\Ticket as ModelsTicket;
 use Amplify\System\Ticket\Models\TicketThread;
 use Amplify\System\Ticket\Requests\TicketRequest;
-use App\Abstracts\BackpackCustomCrudController;
+use Amplify\System\Abstracts\BackpackCustomCrudController;
 use App\Models\Contact;
 use Backpack\CRUD\app\Http\Controllers\Operations\DeleteOperation;
 use Backpack\CRUD\app\Library\CrudPanel\CrudPanelFacade as CRUD;

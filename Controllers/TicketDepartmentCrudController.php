@@ -4,7 +4,7 @@ namespace Amplify\System\Ticket\Controllers;
 
 use Amplify\System\Ticket\Models\TicketDepartment;
 use Amplify\System\Ticket\Requests\TicketDepartmentRequest;
-use App\Abstracts\BackpackCustomCrudController;
+use Amplify\System\Abstracts\BackpackCustomCrudController;
 use Backpack\CRUD\app\Library\CrudPanel\CrudPanelFacade as CRUD;
 
 /**
