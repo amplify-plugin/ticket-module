@@ -2,7 +2,7 @@
 
 namespace Amplify\System\Ticket\Models;
 
-use App\Models\Contact;
+use Amplify\System\Backend\Models\Contact;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;

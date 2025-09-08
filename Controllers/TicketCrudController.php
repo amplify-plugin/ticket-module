@@ -2,12 +2,12 @@
 
 namespace Amplify\System\Ticket\Controllers;
 
+use Amplify\System\Abstracts\BackpackCustomCrudController;
+use Amplify\System\Backend\Models\Contact;
 use Amplify\System\Ticket\Facades\Ticket;
 use Amplify\System\Ticket\Models\Ticket as ModelsTicket;
 use Amplify\System\Ticket\Models\TicketThread;
 use Amplify\System\Ticket\Requests\TicketRequest;
-use Amplify\System\Abstracts\BackpackCustomCrudController;
-use App\Models\Contact;
 use Backpack\CRUD\app\Http\Controllers\Operations\DeleteOperation;
 use Backpack\CRUD\app\Library\CrudPanel\CrudPanelFacade as CRUD;
 use Illuminate\Http\Request;
@@ -122,7 +122,7 @@ class TicketCrudController extends BackpackCustomCrudController
             'entity' => 'assignee',
             'label' => 'Assignee',
             'type' => 'select2_ticket',
-            'model' => "App\Models\User",
+            'model' => "Amplify\System\Backend\Models\User",
             'attribute' => 'name',
         ]);
     }

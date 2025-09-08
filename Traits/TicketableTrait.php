@@ -2,8 +2,8 @@
 
 namespace Amplify\System\Ticket\Traits;
 
+use Amplify\System\Backend\Models\Ticket;
 use Amplify\System\Ticket\Models\TicketThread;
-use App\Models\Ticket;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 

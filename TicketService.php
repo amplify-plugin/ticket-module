@@ -79,7 +79,7 @@ class TicketService
     /**
      * Message sender.
      *
-     * @param \App\Models\User
+     * @param \Amplify\System\Backend\Models\User
      * @return $this
      */
     public function from(TicketableInterface $from)

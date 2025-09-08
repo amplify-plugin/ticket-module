@@ -3,7 +3,6 @@
 namespace Amplify\System\Ticket\Models;
 
 use Amplify\System\Ticket\Interfaces\TicketInterface;
-use App\Models\Contact;
 use Backpack\CRUD\app\Models\Traits\CrudTrait;
 use Illuminate\Database\Eloquent\Model;
 use illuminate\Database\Eloquent\SoftDeletes;
@@ -96,7 +95,7 @@ class Ticket extends Model implements Auditable, TicketInterface
      */
     public function sender()
     {
-        return $this->belongsTo(Contact::class, 'sender_id');
+        return $this->belongsTo(\Amplify\System\Backend\Models\Contact::class, 'sender_id');
     }
 
     /**
