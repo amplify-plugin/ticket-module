@@ -184,7 +184,7 @@ class TicketCrudController extends BackpackCustomCrudController
     {
         $threads = backpack_user()->threads;
 
-        return view('crud::pages.tickets.index', [
+        return view('backend::pages.tickets.index', [
             'threads' => $threads,
             'threadMsg' => $threadMsg,
             'crud' => $this->crud,
