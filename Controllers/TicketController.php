@@ -3,6 +3,7 @@
 namespace Amplify\System\Ticket\Controllers;
 
 use Amplify\Frontend\Traits\HasDynamicPage;
+use Amplify\System\Factories\NotificationFactory;
 use Amplify\System\Ticket\Facades\Ticket;
 use Amplify\System\Ticket\Models\TicketThread;
 use Amplify\System\Ticket\Requests\TicketRequest;
@@ -103,6 +104,11 @@ class TicketController extends Controller
 
         if ($ticket instanceof \Amplify\System\Ticket\Models\Ticket) {
             session()->flash('success', 'New Ticket created successfully');
+            NotificationFactory::callIf(
+                true,
+                \Amplify\System\Backend\Models\Event::TICKET_CREATED,
+                ['ticket' => $ticket]
+            );
         }
 
         return redirect()->route('frontend.tickets.show', $ticket->thread_id);
