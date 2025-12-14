@@ -42,7 +42,8 @@ class TicketDepartmentCrudController extends BackpackCustomCrudController
     protected function setupListOperation()
     {
         CRUD::column('id')->type('number')->thousands_sep('');
-        CRUD::column('name');
+        CRUD::column('name')->type('text');
+        CRUD::column('email')->type('email');
 
         /**
          * Columns can be defined using the fluent syntax or array syntax:
@@ -55,6 +56,7 @@ class TicketDepartmentCrudController extends BackpackCustomCrudController
     {
         CRUD::column('id')->type('number')->thousands_sep('');
         CRUD::column('name');
+        CRUD::column('email');
     }
 
     /**
@@ -68,13 +70,8 @@ class TicketDepartmentCrudController extends BackpackCustomCrudController
     {
         CRUD::setValidation(TicketDepartmentRequest::class);
 
-        CRUD::field('name');
-
-        /**
-         * Fields can be defined using the fluent syntax or array syntax:
-         * - CRUD::field('price')->type('number');
-         * - CRUD::addField(['name' => 'price', 'type' => 'number']));
-         */
+        CRUD::field('name')->attributes(['placeholder' => 'Enter department name'])->wrapper(['class' => 'form-group col-md-6']);
+        CRUD::field('email')->type('email')->attributes(['placeholder' => 'Enter department email'])->wrapper(['class' => 'form-group col-md-6']);
     }
 
     /**
