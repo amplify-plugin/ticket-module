@@ -27,9 +27,6 @@ class TicketRequest extends FormRequest
     public function rules()
     {
         $rules = [
-            'subject' => 'required|max:255',
-            'departments_name_id' => 'required|integer',
-            'priority' => 'required|in:'.implode(',', Ticket::PRIORITY),
             'message' => 'required_without:attachments|nullable|min:1',
             'attachments' => 'required_without:message|array',
             'attachments.*' => 'file',
@@ -38,7 +35,7 @@ class TicketRequest extends FormRequest
         if (Route::is('tickets.store')) {
             $rules['subject'] = 'required';
             $rules['departments_name_id'] = 'required';
-            $rules['priority'] = 'required';
+            $rules['priority'] = 'required|in:'.implode(',', Ticket::PRIORITY);
         }
 
         return $rules;
