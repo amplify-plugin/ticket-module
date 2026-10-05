@@ -3,18 +3,28 @@
 namespace Amplify\System\Ticket\Controllers;
 
 use Amplify\Frontend\Traits\HasDynamicPage;
+use Amplify\System\Backend\Models\Event;
 use Amplify\System\Factories\NotificationFactory;
 use Amplify\System\Ticket\Facades\Ticket;
+use Amplify\System\Ticket\Interfaces\TicketableInterface;
+use Amplify\System\Ticket\Models\Ticket as TicketAlias;
 use Amplify\System\Ticket\Models\TicketThread;
 use Amplify\System\Ticket\Requests\TicketRequest;
+use Amplify\System\Ticket\TicketService;
 use ErrorException;
 use Illuminate\Contracts\Container\BindingResolutionException;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 
 class TicketController extends Controller
 {
     use HasDynamicPage;
+
+    public function __construct(
+        protected TicketService $chat,
+    ) {}
 
     public function newTicket(TicketRequest $request)
     {
@@ -102,11 +112,11 @@ class TicketController extends Controller
             ->attachmentTitle(json_encode($attachmentTitels))
             ->send();
 
-        if ($ticket instanceof \Amplify\System\Ticket\Models\Ticket) {
+        if ($ticket instanceof TicketAlias) {
             session()->flash('success', 'New Ticket created successfully');
             NotificationFactory::callIf(
                 true,
-                \Amplify\System\Backend\Models\Event::TICKET_CREATED,
+                Event::TICKET_CREATED,
                 ['ticket' => $ticket]
             );
         }
@@ -156,6 +166,60 @@ class TicketController extends Controller
             ->send();
 
         return redirect()->route('frontend.tickets.show', $thread->id);
+    }
+
+    public function messages(Request $request, int $thread): JsonResponse
+    {
+        $thread = $this->chat->findThread($thread);
+        $this->chat->authorizeCustomer($thread);
+
+        return $this->messageResponse($request, $thread, 'customer');
+    }
+
+    public function reply(Request $request, int $thread): JsonResponse|RedirectResponse
+    {
+        $thread = $this->chat->findThread($thread);
+        $this->chat->authorizeCustomer($thread);
+
+        $message = $this->storeReply($request, $thread, customer(true));
+
+        if (! $request->expectsJson()) {
+            return redirect()->route('frontend.tickets.show', $thread->id);
+        }
+
+        return response()->json([
+            'message' => $this->chat->present($message, 'customer'),
+        ]);
+    }
+
+    private function messageResponse(Request $request, TicketThread $thread, string $audience): JsonResponse
+    {
+        $afterId = max(0, (int) $request->query('after', 0));
+
+        $messages = $this->chat->messagesAfter($thread, $afterId)
+            ->map(fn ($message) => $this->chat->present($message, $audience))
+            ->values();
+
+        return response()->json([
+            'messages' => $messages,
+        ])->header('Cache-Control', 'no-store');
+    }
+
+    private function storeReply(Request $request, TicketThread $thread, mixed $sender): TicketAlias
+    {
+        if (! $sender instanceof TicketableInterface) {
+            abort(403);
+        }
+
+        $this->chat->prepareReply($request);
+
+        $request->validate([
+            'message' => 'required_without:attachments|nullable|string|min:1|max:10000',
+            'attachments' => 'required_without:message|array|max:10',
+            'attachments.*' => 'file|max:10240',
+        ]);
+
+        return $this->chat->replyTo($sender, $thread, $request);
     }
 
     /**
