@@ -276,7 +276,9 @@ class TicketCrudController extends BackpackCustomCrudController
         $request->validate([
             'message' => 'required_without:attachments|nullable|string|min:1|max:10000',
             'attachments' => 'required_without:message|array|max:10',
-            'attachments.*' => 'file|max:10240',
+            'attachments.*' => TicketRequest::attachmentItemRules(),
+        ], [
+            'attachments.*.mimes' => 'Attach an image, PDF, Word, Excel, PowerPoint, CSV, or text file.',
         ]);
 
         $message = $this->chat->replyTo($sender, $thread, $request);
