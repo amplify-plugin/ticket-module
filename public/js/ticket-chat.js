@@ -67,25 +67,142 @@
         return (payload && payload.message) || 'Could not send the message.';
     }
 
-    function scrollToLatest(scrollEl, force) {
+    function stickToLatest(scrollEl) {
         if (!scrollEl) {
             return;
         }
+        scrollToEnd(scrollEl);
+        followImages(scrollEl);
+        requestAnimationFrame(function () {
+            scrollToEnd(scrollEl);
+            requestAnimationFrame(function () {
+                scrollToEnd(scrollEl);
+            });
+        });
+    }
 
-        var distance = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight;
-        if (force || distance < 120) {
-            scrollEl.scrollTop = scrollEl.scrollHeight;
-        }
+    function followImages(scrollEl) {
+        scrollEl.querySelectorAll('img').forEach(function (img) {
+            if (img.complete || img.dataset.scrollFollow === '1') {
+                return;
+            }
+            img.dataset.scrollFollow = '1';
+            var follow = function () {
+                var gap = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight;
+                var slack = (img.offsetHeight || 0) + 80;
+                if (gap < Math.max(180, slack)) {
+                    scrollToEnd(scrollEl);
+                }
+            };
+            img.addEventListener('load', follow);
+            img.addEventListener('error', follow);
+        });
+    }
 
-        if (!force) {
-            return;
-        }
+    function imageReady(img) {
+        return !img.getAttribute('src') || (img.complete && img.naturalHeight > 0);
+    }
 
+    function scrollToEnd(scrollEl) {
+        scrollEl.scrollTop = scrollEl.scrollHeight;
         var nodes = scrollEl.querySelectorAll('[data-message-id]');
         var last = nodes[nodes.length - 1];
-        if (last && last.scrollIntoView) {
-            last.scrollIntoView({ block: 'nearest' });
+        if (!last) {
+            return;
         }
+        var lastBox = last.getBoundingClientRect();
+        var box = scrollEl.getBoundingClientRect();
+        if (lastBox.bottom > box.bottom + 1) {
+            scrollEl.scrollTop += lastBox.bottom - box.bottom + 8;
+        }
+    }
+
+    function lastMessageVisible(scrollEl) {
+        var nodes = scrollEl.querySelectorAll('[data-message-id]');
+        var last = nodes[nodes.length - 1];
+        if (!last) {
+            return true;
+        }
+        var lastBox = last.getBoundingClientRect();
+        var box = scrollEl.getBoundingClientRect();
+        if (box.height < 40) {
+            return false;
+        }
+        return lastBox.bottom <= box.bottom + 8 && lastBox.bottom > box.top;
+    }
+
+    function pinToLatest(scrollEl) {
+        if (!scrollEl || scrollEl.dataset.pinScroll === '1') {
+            return;
+        }
+        scrollEl.dataset.pinScroll = '1';
+        var revealed = false;
+        var revealing = false;
+        var pending = 0;
+        var deadline = Date.now() + 2500;
+
+        scrollEl.classList.remove('chat-booting');
+
+        function reveal() {
+            if (revealed || revealing) {
+                return;
+            }
+            var imagesReady = pending === 0;
+            var ready = imagesReady && lastMessageVisible(scrollEl);
+            if (!ready && Date.now() < deadline) {
+                return;
+            }
+            revealing = true;
+            scrollToEnd(scrollEl);
+            requestAnimationFrame(function () {
+                scrollToEnd(scrollEl);
+                requestAnimationFrame(function () {
+                    scrollToEnd(scrollEl);
+                    revealed = true;
+                    revealing = false;
+                    var stage = scrollEl.closest('.chat-stage');
+                    if (stage) {
+                        stage.classList.remove('is-loading');
+                    }
+                });
+            });
+        }
+
+        scrollEl.querySelectorAll('img').forEach(function (img) {
+            if (imageReady(img)) {
+                return;
+            }
+            pending += 1;
+            var settled = false;
+            var done = function () {
+                if (settled) {
+                    return;
+                }
+                settled = true;
+                pending = Math.max(0, pending - 1);
+                scrollToEnd(scrollEl);
+            };
+            img.addEventListener('load', done);
+            img.addEventListener('error', done);
+            if (img.decode) {
+                img.decode().then(done, done);
+            }
+        });
+
+        var timer = setInterval(function () {
+            if (revealed) {
+                clearInterval(timer);
+                return;
+            }
+            scrollToEnd(scrollEl);
+            reveal();
+        }, 50);
+        setTimeout(function () {
+            clearInterval(timer);
+            pending = 0;
+            deadline = 0;
+            reveal();
+        }, 2500);
     }
 
     function ensureList(root) {
@@ -132,9 +249,9 @@
         var chipClass = message.mine ? 'text-white' : 'text-dark';
         var chipStyle = message.mine ? 'background: rgba(255,255,255,0.15);' : '';
 
-        return '<a href="' + escapeHtml(attachment.url) + '" target="_blank" download class="d-flex align-items-center p-2 mb-2 rounded text-decoration-none ' + (message.mine ? '' : 'bg-light') + '" style="' + chipStyle + '">' +
-            '<div class="file-icon mr-2 d-flex align-items-center justify-content-center bg-secondary text-white" style="width: 32px; height: 32px; border-radius: 6px;">' +
-            '<i class="fa fa-file-alt" style="font-size: 14px;"></i></div>' +
+        return '<a href="' + escapeHtml(attachment.url) + '" target="_blank" download class="d-flex align-items-center p-2 mt-2 rounded text-decoration-none ' + (message.mine ? '' : 'bg-light') + '" style="' + chipStyle + '">' +
+            '<span class="mr-2 d-flex align-items-center justify-content-center" style="width:32px;height:32px;border-radius:6px;background:#dfe3ea;color:#3d4d6a;flex:0 0 32px;">' +
+            '<i class="fa fa-file-alt" style="font-size:14px;"></i></span>' +
             '<span class="text-truncate small ' + chipClass + '">' + escapeHtml(attachment.name) + '</span></a>';
     }
 
@@ -150,26 +267,20 @@
         });
 
         var imageBlock = images.length ? '<div class="mt-3 d-flex flex-wrap" style="gap: 8px;">' + images.join('') + '</div>' : '';
-        var fileBlock = files.length ? '<div class="mt-3">' + files.join('') + '</div>' : '';
+        var fileBlock = files.join('');
         var align = message.mine ? 'justify-content-end' : 'justify-content-start';
         var bubble = message.mine ? 'bg-primary text-white' : 'bg-white border';
         var radius = message.mine ? '18px 18px 4px 18px' : '18px 18px 18px 4px';
-        var avatar = message.mine
-            ? '<div class="avatar-sm bg-info text-white ml-2 d-flex align-items-center justify-content-center flex-shrink-0" style="width: 36px; height: 36px; border-radius: 50%; margin-top: 4px;"><i class="fa fa-user" style="font-size: 14px;"></i></div>'
-            : '<div class="avatar-sm bg-secondary mr-2 d-flex align-items-center justify-content-center flex-shrink-0" style="width: 36px; height: 36px; border-radius: 50%; margin-top: 4px;"><i class="fa fa-user-tie" style="font-size: 14px;"></i></div>';
-
         var node = document.createElement('div');
         node.className = 'd-flex mb-4 ' + align;
         node.setAttribute('data-message-id', String(message.id));
-        node.innerHTML = (message.mine ? '' : avatar) +
-            '<div class="message-content ' + (message.mine ? 'text-right' : '') + '" style="max-width: 75%;">' +
-            '<div class="message-bubble p-3 ' + bubble + '" style="border-radius: ' + radius + '; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">' +
-            '<p class="mb-0" style="white-space: pre-wrap; word-break: break-word;">' + bodyHtml(message.body) + '</p>' +
+        node.innerHTML = '<div class="message-content" style="max-width: 75%;">' +
+            '<div class="message-bubble p-3 text-left ' + bubble + '" style="border-radius: ' + radius + '; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">' +
+            '<p class="mb-0 text-left" style="margin:0;line-height:1.45;word-break:break-word;">' + bodyHtml(message.body) + '</p>' +
             imageBlock + fileBlock +
             '</div>' +
             '<small class="text-muted d-block mt-1 px-2" style="font-size: 11px;" data-ticket-time="' + escapeHtml(message.sent_at) + '">' + escapeHtml(message.time) + '</small>' +
-            '</div>' +
-            (message.mine ? avatar : '');
+            '</div>';
 
         return node;
     }
@@ -467,7 +578,7 @@
             }
         }, 5000);
 
-        scrollToLatest(scrollEl, true);
+        pinToLatest(scrollEl);
 
         function lastId() {
             var maxId = 0;
@@ -487,7 +598,7 @@
             errors.textContent = text || '';
         }
 
-        function append(messages, forceScroll) {
+        function append(messages) {
             var added = 0;
             var target = ensureList(root);
             if (!target) {
@@ -503,15 +614,12 @@
                 message.mode = mode;
                 target.appendChild(mode === 'admin' ? renderAdmin(message) : renderCustomer(message));
                 added += 1;
-                if (message.mine) {
-                    forceScroll = true;
-                }
             });
 
             if (added > 0) {
                 target.style.height = '';
                 refreshTimes(root);
-                scrollToLatest(scrollEl || target, forceScroll);
+                stickToLatest(scrollEl || target);
             }
 
             return added;
