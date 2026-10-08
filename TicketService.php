@@ -2,10 +2,14 @@
 
 namespace Amplify\System\Ticket;
 
+use Amplify\System\Backend\Models\Contact;
 use Amplify\System\Ticket\Exceptions\TicketException;
 use Amplify\System\Ticket\Interfaces\TicketableInterface;
 use Amplify\System\Ticket\Interfaces\TicketThreadInterface;
+use Amplify\System\Ticket\Models\Ticket as TicketMessage;
 use Amplify\System\Ticket\Models\TicketThread;
+use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\DB;
 
@@ -182,5 +186,233 @@ class TicketService
 
             return $thread;
         });
+    }
+
+    /**
+     * @return array<int, mixed>
+     */
+    public static function listValues(mixed $value): array
+    {
+        if ($value === null || $value === '') {
+            return [];
+        }
+
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+
+            return is_array($decoded) ? array_values($decoded) : [$value];
+        }
+
+        if (is_object($value)) {
+            return array_values((array) $value);
+        }
+
+        if (is_array($value)) {
+            return array_values($value);
+        }
+
+        return [];
+    }
+
+    public static function humanTime(mixed $date): string
+    {
+        if (! $date) {
+            return '';
+        }
+
+        return \Carbon\CarbonImmutable::parse($date)->diffForHumans();
+    }
+
+    public function findThread(int $threadId): TicketThread
+    {
+        $thread = TicketThread::query()
+            ->without('tickets')
+            ->with('participants')
+            ->find($threadId);
+
+        if (! $thread instanceof TicketThread) {
+            abort(404);
+        }
+
+        return $thread;
+    }
+
+    public function authorizeCustomer(TicketThread $thread): void
+    {
+        $contact = customer(true);
+
+        if (! $contact || ! $contact->can('ticket.tickets')) {
+            abort(403);
+        }
+
+        $allowed = $thread->participants->contains(function ($participant) use ($contact) {
+            return $participant->model === Contact::class
+                && (int) $participant->user_id === (int) $contact->id;
+        });
+
+        if (! $allowed) {
+            abort(403);
+        }
+    }
+
+    public function authorizeAdmin(TicketThread $thread): void
+    {
+        $user = backpack_user();
+
+        if (! $user) {
+            abort(403);
+        }
+
+        if ($user->hasRole('Super Admin')) {
+            return;
+        }
+
+        $allowed = $thread->participants->contains(function ($participant) use ($user) {
+            return $participant->model === $user::class
+                && (int) $participant->user_id === (int) $user->id;
+        });
+
+        if (! $allowed) {
+            abort(404);
+        }
+    }
+
+    /**
+     * @return Collection<int, TicketMessage>
+     */
+    public function messagesAfter(TicketThread $thread, int $afterId): Collection
+    {
+        return $thread->tickets()
+            ->where('tickets.id', '>', max(0, $afterId))
+            ->orderBy('tickets.id')
+            ->limit(100)
+            ->get();
+    }
+
+    /**
+     * Drop empty file inputs so a blank attachment field does not satisfy
+     * "message or attachment" validation.
+     */
+    public function prepareReply(Request $request): void
+    {
+        $message = $request->input('message');
+        if (is_string($message)) {
+            $message = trim($message);
+            $request->merge(['message' => $message === '' ? null : $message]);
+        }
+
+        $files = $this->validFiles($request);
+        $request->files->remove('attachments');
+
+        if ($files !== []) {
+            $request->files->set('attachments', $files);
+        }
+    }
+
+    public function replyTo(TicketableInterface $sender, TicketThread $thread, Request $request): TicketMessage
+    {
+        $files = $this->validFiles($request);
+        $titles = array_map(
+            fn ($file) => $file->getClientOriginalName(),
+            $files
+        );
+
+        $message = $this->from($sender)
+            ->to($thread)
+            ->attachments($files === [] ? null : $files)
+            ->attachmentTitle(json_encode($titles))
+            ->message($request->input('message'))
+            ->otherTicketInfo(null, null, null)
+            ->send();
+
+        if (! $message instanceof TicketMessage) {
+            abort(500, 'Unable to save the ticket message.');
+        }
+
+        return $message;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function present(TicketMessage $message, string $audience): array
+    {
+        $urls = self::listValues($message->attachments);
+        $titles = self::listValues($message->attachment_title);
+
+        $attachments = [];
+        foreach ($urls as $index => $url) {
+            if (! is_string($url) || ! $this->isSafeUrl($url)) {
+                continue;
+            }
+
+            $path = parse_url($url, PHP_URL_PATH) ?: $url;
+            $name = $titles[$index] ?? basename($path);
+
+            $attachments[] = [
+                'url' => $url,
+                'name' => is_string($name) && $name !== '' ? $name : basename($path),
+                'is_image' => $this->isImage($path),
+            ];
+        }
+
+        return [
+            'id' => (int) $message->id,
+            'body' => (string) ($message->message ?? ''),
+            'mine' => $this->isMine($message, $audience),
+            'time' => self::humanTime($message->created_at),
+            'sent_at' => optional($message->created_at)->toIso8601String() ?? '',
+            'attachments' => $attachments,
+        ];
+    }
+
+    /**
+     * @return array<int, \Illuminate\Http\UploadedFile>
+     */
+    private function validFiles(Request $request): array
+    {
+        return collect($request->file('attachments', []))
+            ->filter(fn ($file) => $file instanceof \Illuminate\Http\UploadedFile && $file->isValid())
+            ->values()
+            ->all();
+    }
+
+    private function isMine(TicketMessage $message, string $audience): bool
+    {
+        if ($audience === 'customer') {
+            $contact = customer(true);
+
+            return $contact
+                && $message->model === Contact::class
+                && (int) $message->sender_id === (int) $contact->id;
+        }
+
+        if ($audience !== 'admin') {
+            return false;
+        }
+
+        $user = backpack_user();
+
+        return $user
+            && $message->model === $user::class
+            && (int) $message->sender_id === (int) $user->id;
+    }
+
+    private function isSafeUrl(string $url): bool
+    {
+        if (str_starts_with($url, '//')) {
+            return false;
+        }
+
+        return str_starts_with($url, '/')
+            || str_starts_with($url, 'http://')
+            || str_starts_with($url, 'https://');
+    }
+
+    private function isImage(string $path): bool
+    {
+        $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+
+        return in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true);
     }
 }

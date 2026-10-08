@@ -37,5 +37,9 @@ class TicketServiceProvider extends ServiceProvider
     public function boot()
     {
         $this->loadRoutesFrom(__DIR__.'/Routes/web.php');
+
+        $this->publishes([
+            __DIR__.'/public' => public_path('vendor/ticket'),
+        ], 'ticket-asset');
     }
 }

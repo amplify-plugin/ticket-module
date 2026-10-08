@@ -8,6 +8,20 @@ use Illuminate\Support\Facades\Route;
 
 class TicketRequest extends FormRequest
 {
+    public const ATTACHMENT_MIMES = 'jpg,jpeg,png,gif,webp,pdf,doc,docx,txt,rtf,csv,xls,xlsx,ppt,pptx';
+
+    public static function acceptAttribute(): string
+    {
+        return '.'.str_replace(',', ',.', self::ATTACHMENT_MIMES);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public static function attachmentItemRules(): array
+    {
+        return ['file', 'mimes:'.self::ATTACHMENT_MIMES, 'max:10240'];
+    }
     /**
      * Determine if the user is authorized to make this request.
      *
@@ -29,7 +43,7 @@ class TicketRequest extends FormRequest
         $rules = [
             'message' => 'required_without:attachments|nullable|min:1',
             'attachments' => 'required_without:message|array',
-            'attachments.*' => 'file',
+            'attachments.*' => self::attachmentItemRules(),
         ];
 
         if (Route::is('tickets.store')) {
@@ -61,7 +75,7 @@ class TicketRequest extends FormRequest
     public function messages()
     {
         return [
-            'attachments.*.mimetypes' => 'Every attachment should be a valid file.',
+            'attachments.*.mimes' => 'Attach an image, PDF, Word, Excel, PowerPoint, CSV, or text file.',
         ];
     }
 }
