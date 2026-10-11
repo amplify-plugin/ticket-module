@@ -5,11 +5,15 @@ namespace Amplify\System\Ticket\Controllers;
 use Amplify\System\Abstracts\BackpackCustomCrudController;
 use Amplify\System\Backend\Models\Contact;
 use Amplify\System\Ticket\Facades\Ticket;
+use Amplify\System\Ticket\Interfaces\TicketableInterface;
 use Amplify\System\Ticket\Models\Ticket as ModelsTicket;
 use Amplify\System\Ticket\Models\TicketThread;
 use Amplify\System\Ticket\Requests\TicketRequest;
+use Amplify\System\Ticket\TicketService;
 use Backpack\CRUD\app\Http\Controllers\Operations\DeleteOperation;
 use Backpack\CRUD\app\Library\CrudPanel\CrudPanelFacade as CRUD;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
 /**
@@ -25,6 +29,12 @@ class TicketCrudController extends BackpackCustomCrudController
     use \Backpack\CRUD\app\Http\Controllers\Operations\UpdateOperation;
     use DeleteOperation {
         destroy as traitDelete;
+    }
+
+    public function __construct(
+        protected TicketService $chat,
+    ) {
+        parent::__construct();
     }
 
     /**
@@ -240,5 +250,58 @@ class TicketCrudController extends BackpackCustomCrudController
         $ticketThread->delete();
 
         return true;
+    }
+
+    public function messages(Request $request, int $thread): JsonResponse
+    {
+        $thread = $this->chat->findThread($thread);
+        $this->chat->authorizeAdmin($thread);
+
+        return $this->messageResponse($request, $thread);
+    }
+
+    public function reply(Request $request, int $thread): JsonResponse|RedirectResponse
+    {
+        $thread = $this->chat->findThread($thread);
+        $this->chat->authorizeAdmin($thread);
+
+        $sender = backpack_user();
+
+        if (! $sender instanceof TicketableInterface) {
+            abort(403);
+        }
+
+        $this->chat->prepareReply($request);
+
+        $request->validate([
+            'message' => 'required_without:attachments|nullable|string|min:1|max:10000',
+            'attachments' => 'required_without:message|array|max:10',
+            'attachments.*' => TicketRequest::attachmentItemRules(),
+        ], [
+            'attachments.*.mimes' => 'Attach an image, PDF, Word, Excel, PowerPoint, CSV, or text file.',
+        ]);
+
+        $message = $this->chat->replyTo($sender, $thread, $request);
+
+        if (! $request->expectsJson()) {
+            return redirect(backpack_url('ticket', [$thread->id, 'show']));
+        }
+
+        return response()->json([
+            'message' => $this->chat->present($message, 'admin'),
+        ]);
+    }
+
+    private function messageResponse(Request $request, TicketThread $thread): JsonResponse
+    {
+        $afterId = max(0, (int) $request->query('after', 0));
+
+        $messages = $this->chat->messagesAfter($thread, $afterId)
+            ->map(fn ($message) => $this->chat->present($message, 'admin'))
+            ->values();
+
+        return response()->json([
+            'messages' => $messages,
+        ])->header('Cache-Control', 'no-store');
     }
 }
